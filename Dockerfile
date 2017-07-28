@@ -1,137 +1,63 @@
 FROM alpine:3.5
 
-MAINTAINER Jérôme Foray "moi@foray-jero.me"
+EXPOSE 80 443
 
-ENV NGINX_VERSION 1.11.12
-ENV NCHAN_VERSION 1.1.3
+ARG APK_CACHE_IP=172.17.0.1
+ARG APK_CACHE_DOMAIN='dl-cdn.alpinelinux.org nginx.org'
 
-RUN GPG_KEYS=B0F4253373F8F6F510D42178520A9993A1C052F8 \
-	&& CONFIG="\
-		--prefix=/etc/nginx \
-		--sbin-path=/usr/sbin/nginx \
-		--modules-path=/usr/lib/nginx/modules \
-		--conf-path=/etc/nginx/nginx.conf \
-		--error-log-path=/var/log/nginx/error.log \
-		--http-log-path=/var/log/nginx/access.log \
-		--pid-path=/var/run/nginx.pid \
-		--lock-path=/var/run/nginx.lock \
-		--http-client-body-temp-path=/var/cache/nginx/client_temp \
-		--http-proxy-temp-path=/var/cache/nginx/proxy_temp \
-		--http-fastcgi-temp-path=/var/cache/nginx/fastcgi_temp \
-		--http-uwsgi-temp-path=/var/cache/nginx/uwsgi_temp \
-		--http-scgi-temp-path=/var/cache/nginx/scgi_temp \
-		--user=nginx \
-		--group=nginx \
-		--with-http_ssl_module \
-		--with-http_realip_module \
-		--with-http_addition_module \
-		--with-http_sub_module \
-		--with-http_dav_module \
-		--with-http_flv_module \
-		--with-http_mp4_module \
-		--with-http_gunzip_module \
-		--with-http_gzip_static_module \
-		--with-http_random_index_module \
-		--with-http_secure_link_module \
-		--with-http_stub_status_module \
-		--with-http_auth_request_module \
-		--with-http_xslt_module=dynamic \
-		--with-http_image_filter_module=dynamic \
-		--with-http_geoip_module=dynamic \
-		--with-http_perl_module=dynamic \
-		--with-threads \
-		--with-stream \
-		--with-stream_ssl_module \
-		--with-http_slice_module \
-		--with-mail \
-		--with-mail_ssl_module \
-		--with-file-aio \
-		--with-http_v2_module \
-		--with-ipv6 \
-		--add-dynamic-module=/usr/src/nchan-${NCHAN_VERSION} \
-	" \
-	&& addgroup -S nginx \
-	&& adduser -D -S -h /var/cache/nginx -s /sbin/nologin -G nginx nginx \
-	&& apk add --no-cache --virtual .build-deps \
-		gcc \
-		libc-dev \
-		make \
-		openssl-dev \
-		pcre-dev \
-		zlib-dev \
-		linux-headers \
-		curl \
-		gnupg \
-		libxslt-dev \
-		gd-dev \
-		geoip-dev \
-		perl-dev \
-	&& curl -fSL http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz -o nginx.tar.gz \
-	&& curl -fSL http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz.asc  -o nginx.tar.gz.asc \
-	&& curl -fSL https://github.com/slact/nchan/archive/v${NCHAN_VERSION}.tar.gz -o nchan.tar.gz \
-	&& export GNUPGHOME="$(mktemp -d)" \
-	&& gpg --keyserver ha.pool.sks-keyservers.net --recv-keys "$GPG_KEYS" \
-	&& gpg --batch --verify nginx.tar.gz.asc nginx.tar.gz \
-	&& rm -r "$GNUPGHOME" nginx.tar.gz.asc \
-	&& mkdir -p /usr/src \
-	&& tar -zxC /usr/src -f nginx.tar.gz \
-	&& tar -zxC /usr/src -f nchan.tar.gz \
-	&& rm nginx.tar.gz \
-	&& rm nchan.tar.gz \
-	&& cd /usr/src/nginx-$NGINX_VERSION \
-	&& ./configure $CONFIG --with-debug \
-	&& make \
-	&& mv objs/nginx objs/nginx-debug \
-	&& mv objs/ngx_http_xslt_filter_module.so objs/ngx_http_xslt_filter_module-debug.so \
-	&& mv objs/ngx_http_image_filter_module.so objs/ngx_http_image_filter_module-debug.so \
-	&& mv objs/ngx_http_geoip_module.so objs/ngx_http_geoip_module-debug.so \
-	&& mv objs/ngx_http_perl_module.so objs/ngx_http_perl_module-debug.so \
-	&& mv objs/ngx_nchan_module.so objs/ngx_nchan_module-debug.so \
-	&& ./configure $CONFIG \
-	&& make \
-	&& make install \
-	&& rm -rf /etc/nginx/html/ \
-	&& mkdir /etc/nginx/conf.d/ \
-	&& mkdir -p /usr/share/nginx/html/ \
-	&& install -m644 html/index.html /usr/share/nginx/html/ \
-	&& install -m644 html/50x.html /usr/share/nginx/html/ \
-	&& install -m755 objs/nginx-debug /usr/sbin/nginx-debug \
-	&& install -m755 objs/ngx_http_xslt_filter_module-debug.so /usr/lib/nginx/modules/ngx_http_xslt_filter_module-debug.so \
-	&& install -m755 objs/ngx_http_image_filter_module-debug.so /usr/lib/nginx/modules/ngx_http_image_filter_module-debug.so \
-	&& install -m755 objs/ngx_http_geoip_module-debug.so /usr/lib/nginx/modules/ngx_http_geoip_module-debug.so \
-	&& install -m755 objs/ngx_http_perl_module-debug.so /usr/lib/nginx/modules/ngx_http_perl_module-debug.so \
-	&& install -m755 objs/ngx_nchan_module-debug.so /usr/lib/nginx/modules/ngx_nchan_module-debug.so \
-	&& ln -s ../../usr/lib/nginx/modules /etc/nginx/modules \
-	&& strip /usr/sbin/nginx* \
-	&& strip /usr/lib/nginx/modules/*.so \
-	&& rm -rf /usr/src/nginx-$NGINX_VERSION \
-	\
-	# Bring in gettext so we can get `envsubst`, then throw
-	# the rest away. To do this, we need to install `gettext`
-	# then move `envsubst` out of the way so `gettext` can
-	# be deleted completely, then move `envsubst` back.
-	&& apk add --no-cache --virtual .gettext gettext \
-	&& mv /usr/bin/envsubst /tmp/ \
-	\
-	&& runDeps="$( \
-		scanelf --needed --nobanner /usr/sbin/nginx /usr/lib/nginx/modules/*.so /tmp/envsubst \
-			| awk '{ gsub(/,/, "\nso:", $2); print "so:" $2 }' \
-			| sort -u \
-			| xargs -r apk info --installed \
-			| sort -u \
-	)" \
-	&& apk add --no-cache --virtual .nginx-rundeps $runDeps \
-	&& apk del .build-deps \
-	&& apk del .gettext \
-	&& mv /tmp/envsubst /usr/bin/ \
-	\
-	# forward request and error logs to docker log collector
+ARG RUN_DEPS='pcre openssl geoip'
+ARG BUILD_DEPS='pcre-dev openssl-dev geoip-dev zlib-dev g++ make coreutils tar'
+
+ARG NGINX_VERSION=1.11.5
+ARG NGINX_URL='http://nginx.org/download'
+ARG NGINX_TMP=/tmp/nginx
+ENV NGINX_CONF=/etc/nginx
+
+ARG NCHAN_VERSION=1.1.7
+ARG NCHAN_URL='http://api.github.com/repos/slact/nchan'
+ARG NCHAN_TMP=nchan
+
+RUN nc -z $APK_CACHE_IP 80 && echo $APK_CACHE_IP $APK_CACHE_DOMAIN >>/etc/hosts \
+ ; apk --update add --no-cache $RUN_DEPS $BUILD_DEPS \
+   && mkdir -p $NGINX_TMP && cd $NGINX_TMP && mkdir $NCHAN_TMP \
+   && NGINX_LATEST=$(wget -qO- $NGINX_URL | egrep -o "[0-9]+\.[0-9]+\.[0-9]+" | sort -Vr | head -1) \
+   && wget -qO- $NGINX_URL/nginx-${NGINX_VERSION:=$NGINX_LATEST}.tar.gz | tar xz --strip-components=1 \
+   && NCHAN_LATEST=$(wget -qO- $NCHAN_URL/tags | egrep -o "[0-9]+\.[0-9]+\.[0-9]+" | sort -Vr | head -1) \
+   && wget -qO- $NCHAN_URL/tarball/v${NCHAN_VERSION:=$NCHAN_LATEST} | tar xz --strip-components=1 -C $NCHAN_TMP \
+   && ./configure \
+     --with-ld-opt="-Wl,-s" \
+     --prefix=/var/lib/nginx \
+     --sbin-path=/usr/sbin/nginx \
+     --conf-path=$NGINX_CONF/nginx.conf \
+     --pid-path=/run/nginx.pid \
+     --lock-path=/run/nginx.lock \
+     --error-log-path=/dev/stderr \
+     --http-log-path=/dev/stdout \
+     --with-ipv6 \
+     --with-pcre \
+     --with-http_ssl_module \
+     --with-http_stub_status_module \
+     --with-http_gzip_static_module \
+     --with-http_v2_module \
+     --with-http_auth_request_module \
+     --with-stream \
+     --with-stream_ssl_module \
+     --with-mail \
+     --with-mail_ssl_module \
+     --with-http_realip_module \
+     --with-http_geoip_module \
+     --without-http_scgi_module \
+     --add-module=$NCHAN_TMP \
+   && make -j$(nproc) install && nginx -V \
+ && apk del $BUILD_DEPS && rm -rf /var/cache/apk/* $NGINX_TMP \
 	&& ln -sf /dev/stdout /var/log/nginx/access.log \
 	&& ln -sf /dev/stderr /var/log/nginx/error.log
+
+WORKDIR $NGINX_CONF
+
+
+CMD ["nginx","-g","daemon off;"]
 
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY nginx.vh.default.conf /etc/nginx/conf.d/default.conf
 
-EXPOSE 80 443
-
-CMD ["nginx", "-g", "daemon off;"]
