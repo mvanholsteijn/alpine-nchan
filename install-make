@@ -1,0 +1,4 @@
+#!/bin/bash
+curl -s https://quby.githost.io/open-source/docker-make/raw/master/.make-release-support > .make-release-support
+curl -s https://quby.githost.io/open-source/docker-make/raw/master/Makefile > Makefile.mk
+[ ! -f Makefile ] && echo include Makefile.mk > Makefile
