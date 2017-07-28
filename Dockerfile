@@ -49,7 +49,9 @@ RUN nc -z $APK_CACHE_IP 80 && echo $APK_CACHE_IP $APK_CACHE_DOMAIN >>/etc/hosts 
      --without-http_scgi_module \
      --add-module=$NCHAN_TMP \
    && make -j$(nproc) install && nginx -V \
- && apk del $BUILD_DEPS && rm -rf /var/cache/apk/* $NGINX_TMP 
+   && apk del $BUILD_DEPS && rm -rf /var/cache/apk/* $NGINX_TMP  \
+   && addgroup -S nginx \
+   && adduser -D -S -h /var/cache/nginx -s /sbin/nologin -G nginx nginx 
 
 WORKDIR $NGINX_CONF
 
